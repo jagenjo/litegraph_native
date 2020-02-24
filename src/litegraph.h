@@ -135,8 +135,15 @@ namespace LiteGraph {
 		std::string getString();
 		std::vector<LData*> getArray();
 		void* const getPointer(); //for safe accessing the data
-		template<class T> T getObject(); //I think this will crash...
-
+		void* getObject();
+		template<class T> T getObject(const T& v) //Used with custom types
+		{
+			T obj;
+			if (type == DataType::OBJECT && sizeof(T) == bytes)
+				memcpy(&obj, custom_data, bytes);
+			return obj;
+		}
+		
 		void operator = (const LData& v);
 		void operator = (const bool& v) { assign(v); }
 		void operator = (const float& v) { assign(v); }

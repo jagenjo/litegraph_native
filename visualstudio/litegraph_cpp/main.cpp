@@ -8,7 +8,6 @@
 //used only for sleep and keypress
 #include <windows.h>
 
-
 int main()
 {
     std::cout << "LiteGraph v0.1\n*********************\n"; 
@@ -26,7 +25,7 @@ int main()
 	std::cout << "Starting graph execution ****" << std::endl;
 	while (1)
 	{
-		mygraph.runStep(0.01);
+		mygraph.runStep(0.01f);
 		Sleep(10);
 		if ( (GetKeyState(' ') | GetKeyState(27)) & 0x8000 ) /*Check if high-order bit is set (1 << 15)*/
 			break;

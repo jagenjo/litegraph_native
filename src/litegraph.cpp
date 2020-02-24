@@ -191,12 +191,11 @@ void* const LiteGraph::LData::getPointer()
 	return pointer;
 }
 
-template<class T> T LiteGraph::LData::getObject()
+void* LiteGraph::LData::getObject()
 {
-	T obj;
-	if (type == DataType::OBJECT)
-		memcpy(&obj, custom_data, sizeof(T));
-	return T;
+	if (type != DataType::OBJECT)
+		return NULL;
+	return custom_data;
 }
 
 void LiteGraph::LData::operator = (const LData& v)

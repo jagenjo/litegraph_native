@@ -314,7 +314,7 @@ void TrigonometryNode::onExecute()
 	double v = 0;
 	if (isInputConnected(0))
 		v = getInputDataAsNumber(0);
-	for (int i = 0; i < outputs.size(); ++i)
+	for (unsigned int i = 0; i < outputs.size(); ++i)
 	{
 		LSlot* slot = outputs[i];
 		if (!slot->isConnected())
