@@ -6,9 +6,13 @@
 
 namespace LiteGraph {
 
+	extern bool verbose;
+
 	struct vec2 { float x; float y;	};
 	struct vec3 { float x; float y; float z; };
 	struct vec4 { float x; float y; float z; float w; };
+	typedef vec4 quat;
+	struct mat3 { float m[9]; };
 	struct mat4 { float m[16]; };
 
 	class LSlot;
@@ -31,7 +35,11 @@ namespace LiteGraph {
 		BOOL,
 		VEC2,
 		VEC3,
+		VEC4,
+		QUAT,
+		MAT3,
 		MAT4,
+		ARRAY, //array of LData
 		JSON_OBJECT,
 		OBJECT, //generic object that must be stored inside
 		POINTER,//pointer to something outside
@@ -39,19 +47,26 @@ namespace LiteGraph {
 		ANY
 	};
 
+	#define LEVENT_SIZE 255
+
 	//used when triggering events
 	class LEvent {
 	public:
-		std::string type;
-		std::string data;
-		LEvent() {}
-		LEvent(std::string type) { this->type = type; }
-		LEvent(std::string type, std::string data) { this->type = type; this->data = data;  }
+		char type[LEVENT_SIZE];
+		char data[LEVENT_SIZE];
+		float num; //may be useful
+		LEvent() { type[0] = 0; data[0] = 0; num = 0; }
+		LEvent(const char* type) { setType(type);  data[0] = 0; num = 0; }
+		LEvent(const char* type, const char* data) { setType(type); setData(data); num = 0; }
+		void setType(const char* type) { strcpy_s(this->type, LEVENT_SIZE, type); }
+		void setData(const char* data) { strcpy_s(this->data, LEVENT_SIZE, data); }
+		void operator = (const LEvent& e) { setType(e.type); setData(e.data); num = e.num; }
 	};
 
 	void registerCustomDataType(const char* name, int id);
 	DataType stringToType(const char* str);
 
+	//total, 32 bytes per data (variable in case of dynamic content)
 	class LData {
 	public:
 		DataType type;
@@ -64,13 +79,11 @@ namespace LiteGraph {
 			vec2 vector2;
 			vec3 vector3;
 			vec4 vector4;
-			mat4 matrix44;
+			quat quaternion;
+			void* pointer;
 		};
 
-		//in case its an event
-		LEvent event; 
-
-		//custom
+		//used to store large objects or objects with variable size
 		int bytes; //allocated bytes
 		void* custom_data; //generic pointer
 
@@ -78,11 +91,27 @@ namespace LiteGraph {
 		~LData();
 		void clear();
 		void setType(DataType type);
-		void setString(const char* str);
-		void setPointer(void* obj);
-		std::string getString();
-		//template<class T> void setObject(T obj);
 
+		void assign(float v) { setType(DataType::NUMBER); number = v; }
+		void assign(vec2 v) { setType(DataType::VEC2); vector2 = v; }
+		void assign(vec3 v) { setType(DataType::VEC3); vector3 = v; }
+		void assign(vec4 v) { setType(DataType::VEC4); vector4 = v; }
+		//void assign(quat v) { setType(DataType::QUAT); quaternion = v; } //same as vec4 so no need
+		void assign(void* pointer) { setType(DataType::POINTER); this->pointer = pointer; }
+
+		void assign(mat3 v);
+		void assign(mat4 v);
+		void assign(const LEvent& v);
+		void assign(const char* str);
+		void assign(void* pointer, int size);
+		void assign(const std::vector<LData*>& v);
+		template<class T> void assignObject(const T& obj);
+
+		LEvent getEvent();
+		std::string getString();
+		std::vector<LData*> getArray();
+
+		void operator = (const LData& v);
 	};
 
 	class LLink {
@@ -155,6 +184,7 @@ namespace LiteGraph {
 
 		//void connect(int output_slot, LGraphNode* target_node, int target_input_slot);
 
+		LData* getInputData(int slot);
 		bool getInputDataAsBoolean(int slot);
 		double getInputDataAsNumber(int slot);
 		std::string getInputDataAsString(int slot);

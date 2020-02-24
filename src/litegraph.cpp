@@ -7,6 +7,7 @@
 
 #include "libs/cJSON.h"
 
+bool LiteGraph::verbose = false;
 
 
 LiteGraph::LData::LData()
@@ -23,11 +24,22 @@ LiteGraph::LData::~LData()
 
 void LiteGraph::LData::clear()
 {
-	if (custom_data && bytes)
+	if (custom_data)
 	{
-		delete[] custom_data;
+		if (bytes)
+		{
+			if (type == DataType::ARRAY) //array is the only case that contains pointers
+			{
+				LData* d = (LData*)custom_data;
+				int num = bytes / sizeof(LData);
+				for (int i = 0; i < num; ++i)
+					d[i].clear();
+			}
+			//LEvent no need to control, it doesnt contains pointers
+			delete[] custom_data;
+			bytes = 0;
+		}
 		custom_data = NULL;
-		bytes = 0;
 	}
 }
 
@@ -35,23 +47,111 @@ void LiteGraph::LData::setType(DataType type)
 {
 	if (type == this->type)
 		return;
-	clear();
 	this->type = type;
+	int size = 0;
+	switch (type)
+	{
+		case DataType::MAT3: size = sizeof(mat3); break;
+		case DataType::MAT4: size = sizeof(mat4); break;
+		case DataType::EVENT: size = sizeof(LEvent); break;
+		default: size = 0;
+	}
+	if (bytes != size)
+		clear();
+	if (size)
+	{
+		custom_data = (void*)new uint8_t[size];
+		bytes = size;
+		memset(custom_data, 0, bytes);
+	}
 }
 
-void LiteGraph::LData::setString(const char* str)
+void LiteGraph::LData::assign(mat3 v)
 {
-	clear();
+	if (type != DataType::MAT3)
+		setType(DataType::MAT3);
+	memcpy(custom_data, &v, bytes);
+}
+
+void LiteGraph::LData::assign(mat4 v)
+{
+	if (type != DataType::MAT4)
+		setType(DataType::MAT4);
+	memcpy(custom_data, &v, bytes);
+}
+
+void LiteGraph::LData::assign(const LEvent& v)
+{
+	setType(DataType::EVENT);
+	LEvent* e = (LEvent*)custom_data;
+	*e = v;
+}
+
+void LiteGraph::LData::assign(const char* str)
+{
 	int l = strlen(str);
-	char* text = new char[l];
+	if (type != DataType::STRING)
+		setType(DataType::STRING); //clears
+	char* text = NULL;
+	if (l != bytes)
+	{
+		clear();
+		text = new char[l];
+		bytes = l;
+		custom_data = (void*)text;
+	}
 	strcpy_s(text, l, str);
-	bytes = l;
-	custom_data = (void*) text;
+}
+
+void LiteGraph::LData::assign(void* pointer, int size)
+{
+	if (type != DataType::OBJECT)
+		setType(DataType::OBJECT);//clear
+
+	if(bytes != size)
+	{
+		clear();
+		custom_data = (void*)new uint8_t[size];
+		bytes = size;
+	}
+
+	if (pointer)
+		memcpy(custom_data, pointer, bytes);
+	else //allows to send NULL to just allocate space
+		memset(custom_data, 0, bytes); //set to zero
+}
+
+template<class T> 
+void LiteGraph::LData::assignObject(const T& obj)
+{
+	assign((void*)&obj,sizeof(T) );
+}
+
+void LiteGraph::LData::assign(const std::vector<LData*>& v)
+{
+	//arrays are converted to an array of data, not pointers of data
+	setType(DataType::ARRAY);
+	clear();
+	LData* d = new LData[v.size()];
+	for (int i = 0; i < v.size(); ++i)
+		d[i] = *v[i];
+	custom_data = (void*)d;
+}
+
+std::vector<LiteGraph::LData*> LiteGraph::LData::getArray()
+{
+	LData* d = (LData*)custom_data;
+	std::vector<LData*> r;
+	int num = bytes / sizeof(LData*);
+	r.resize(num);
+	for (int i = 0; i < num; ++i)
+		r[i] = d + i;
+	return r;
 }
 
 std::string LiteGraph::LData::getString()
 {
-	if (bytes == 0 || type != DataType::STRING)
+	if (bytes == 0 || type != DataType::STRING) //careful if not null terminates string
 		return NULL;
 	std::string result;
 	result.resize(bytes);
@@ -59,11 +159,19 @@ std::string LiteGraph::LData::getString()
 	return result;
 }
 
-void LiteGraph::LData::setPointer( void* obj )
+void LiteGraph::LData::operator = (const LData& v)
 {
 	clear();
-	custom_data = obj;
+	memcpy(this, &v, sizeof(LData)); //clone content
+	if (bytes) //clone allocated bytes
+	{
+		void* newp = new uint8_t[bytes];
+		memcpy(newp, v.custom_data, bytes);
+		custom_data = newp;
+		//no need to control DataType::ARRAY, as they are not pointers
+	}
 }
+
 
 /*
 template<class T>
@@ -110,8 +218,7 @@ LiteGraph::LSlot* LiteGraph::LGraphNode::addOutput(const char* name, LiteGraph::
 	outputs.push_back(slot);
 
 	slot->data = new LData();
-	slot->data->type = type;
-
+	//slot->data->type = type;
 	return slot;
 }
 
@@ -145,6 +252,13 @@ bool LiteGraph::LGraphNode::isOutputConnected(int index)
 	return slot->isConnected();
 }
 
+LiteGraph::LData* LiteGraph::LGraphNode::getInputData(int index)
+{
+	LSlot* slot = getInputSlot(index);
+	if (!slot)
+		return false;
+	return slot->getOriginData();
+}
 
 bool LiteGraph::LGraphNode::getInputDataAsBoolean(int index)
 {
@@ -211,13 +325,12 @@ void LiteGraph::LGraphNode::setOutputDataAsBoolean(int index, bool v)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || (data->type != DataType::BOOL && data->type != DataType::ANY))
+	if (data == NULL || (slot->type != DataType::BOOL && slot->type != DataType::ANY))
 	{
-		std::cout << "output data dont match: " << data->type << " expected BOOLEAN " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected BOOLEAN " << std::endl;
 		return;
 	}
-	data->setType(DataType::BOOL);
-	data->boolean = v;
+	data->assign(v);
 }
 
 void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, double v)
@@ -226,13 +339,12 @@ void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, double v)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || (data->type != DataType::NUMBER && data->type != DataType::ANY))
+	if (data == NULL || (slot->type != DataType::NUMBER && slot->type != DataType::ANY))
 	{
-		std::cout << "output data dont match: " << data->type << " expected NUMBER " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected NUMBER " << std::endl;
 		return;
 	}
-	data->setType(DataType::NUMBER);
-	data->number = v;
+	data->assign(v);
 }
 
 
@@ -242,13 +354,12 @@ void LiteGraph::LGraphNode::setOutputDataAsString(int index, const char* v)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || (data->type != DataType::STRING && data->type != DataType::ANY) )
+	if (data == NULL || (slot->type != DataType::STRING && slot->type != DataType::ANY) )
 	{
-		std::cout << "output data dont match: " << data->type << " expected STRING " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected STRING " << std::endl;
 		return;
 	}
-	data->setType(DataType::STRING);
-	data->setString(v);
+	data->assign(v);
 }
 
 void LiteGraph::LGraphNode::setOutputDataAsPointer(int index, void* v)
@@ -257,13 +368,12 @@ void LiteGraph::LGraphNode::setOutputDataAsPointer(int index, void* v)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || data->type != DataType::POINTER)
+	if (data == NULL || slot->type != DataType::POINTER)
 	{
-		std::cout << "output data dont match: " << data->type << " expected POINTER " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected POINTER " << std::endl;
 		return;
 	}
-	data->setType(DataType::POINTER);
-	data->setPointer(v);
+	data->assign(v);
 }
 
 void LiteGraph::LGraphNode::setOutputDataAsEvent(int index, LEvent event)
@@ -272,13 +382,12 @@ void LiteGraph::LGraphNode::setOutputDataAsEvent(int index, LEvent event)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || (data->type != DataType::EVENT && data->type != DataType::ANY))
+	if (data == NULL || (slot->type != DataType::EVENT && slot->type != DataType::ANY))
 	{
-		std::cout << "output data dont match: " << data->type << " expected EVENT " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected EVENT " << std::endl;
 		return;
 	}
-	data->setType(DataType::EVENT);
-	data->event = event;
+	data->assign(event);
 }
 
 void LiteGraph::LGraphNode::trigger(int index, LEvent event)
@@ -287,13 +396,12 @@ void LiteGraph::LGraphNode::trigger(int index, LEvent event)
 	if (!slot)
 		return;
 	LData* data = slot->data;
-	if (data == NULL || (data->type != DataType::EVENT && data->type != DataType::ANY))
+	if (data == NULL || (slot->type != DataType::EVENT && slot->type != DataType::ANY))
 	{
-		std::cout << "output data dont match: " << data->type << " expected EVENT " << std::endl;
+		std::cout << "output data dont match: " << slot->type << " expected EVENT " << std::endl;
 		return;
 	}
-	data->setType(DataType::EVENT);
-	data->event = event;
+	data->assign(event);
 
 	for (int i = 0; i < slot->links.size(); ++i)
 	{
@@ -428,7 +536,8 @@ bool LiteGraph::LGraph::configure(std::string data)
 	if (cJSON_IsNumber(num_json))
 		last_link_id = num_json->valueint;
 
-	std::cout << "Nodes *****************" << std::endl;
+	if(LiteGraph::verbose)
+		std::cout << "Nodes *****************" << std::endl;
 
 	//nodes
 	cJSON* nodes_json = cJSON_GetObjectItemCaseSensitive(json, "nodes");
@@ -438,7 +547,8 @@ bool LiteGraph::LGraph::configure(std::string data)
 		int id = cJSON_GetObjectItem(node_json, "id")->valueint;
 		char* node_type = cJSON_GetObjectItem(node_json, "type")->valuestring;
 
-		std::cout << id << ".-" << (node_type ? node_type : "?") << std::endl;
+		if (LiteGraph::verbose)
+			std::cout << id << ".-" << (node_type ? node_type : "?") << std::endl;
 
 		LGraphNode* node = createNode(node_type);
 		if (!node)
@@ -490,7 +600,8 @@ bool LiteGraph::LGraph::configure(std::string data)
 	//in case they are not stored in execution order
 	sortByExecutionOrder();
 
-	std::cout << "Links *****************" << std::endl;
+	if (LiteGraph::verbose)
+		std::cout << "Links *****************" << std::endl;
 	
 	//connect links
 	cJSON* links_json = cJSON_GetObjectItemCaseSensitive(json, "links");
@@ -504,7 +615,8 @@ bool LiteGraph::LGraph::configure(std::string data)
 		int target_slot_index = cJSON_GetArrayItem(link_json, 4)->valueint;
 		char* link_type = cJSON_GetArrayItem(link_json, 5)->valuestring;
 
-		std::cout << origin_id << " -> " << target_id << " ["<< ( link_type ? link_type : "*" ) << "]" << std::endl;
+		if (LiteGraph::verbose)
+			std::cout << origin_id << " -> " << target_id << " ["<< ( link_type ? link_type : "*" ) << "]" << std::endl;
 
 		LLink* link = new LLink(id, origin_id, origin_slot_index, target_id, target_slot_index);
 		links.push_back(link);
@@ -530,9 +642,9 @@ bool LiteGraph::LGraph::configure(std::string data)
 		target_slot->link = link;
 	}
 
-	std::cout << "***********************" << std::endl;
-
-	
+	if (LiteGraph::verbose)
+		std::cout << "***********************" << std::endl;
+		
 	return true;
 }
 
@@ -549,7 +661,8 @@ std::string LiteGraph::getFileContent(const std::string& path)
 void LiteGraph::registerNodeType(LiteGraph::LGraphNode* node_type)
 {
 	node_types[node_type->getType()] = node_type;
-	std::cout << "node registered: " << node_type->getType() << " ******************* " << std::endl;
+	if(LiteGraph::verbose)
+		std::cout << "node registered: " << node_type->getType() << " ******************* " << std::endl;
 }
 
 LiteGraph::LGraphNode* LiteGraph::createNode(const char* name)
@@ -588,7 +701,6 @@ bool LiteGraph::readJSONNumber(JSON obj, const char* name, int& dst)
 		return false;
 	return true;
 }
-
 
 bool LiteGraph::readJSONNumber(JSON obj, const char* name, float& dst)
 {
@@ -688,6 +800,8 @@ LiteGraph::DataType LiteGraph::stringToType(const char* str)
 		return DataType::MAT4;
 	if (s == "OBJECT")
 		return DataType::OBJECT;
+	if (s == "ARRAY")
+		return DataType::ARRAY;
 	if (s == "JSON_OBJECT")
 		return DataType::JSON_OBJECT;
 	if (s == "POINTER")
