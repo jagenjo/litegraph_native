@@ -31,7 +31,7 @@ public:
 
 	ConsoleNode();
 	void onExecute();
-	void onAction(int slot, LEvent& event);
+	void onAction(int slot, const LEvent& event);
 };
 
 class TimeNode : public LGraphNode
@@ -89,7 +89,6 @@ public:
 	REGISTERNODE("basic/object_property", ObjectPropertyNode);
 
 	std::string name;
-	std::string _str;
 
 	ObjectPropertyNode();
 	void onExecute();
@@ -113,16 +112,7 @@ class ConditionNode : public LGraphNode
 public:
 	REGISTERNODE("math/condition", ConditionNode);
 
-	enum ConditionType {
-		EQUAL,
-		NEQUAL,
-		GREATER,
-		GEQUAL,
-		LESS,
-		LEQUAL,
-		OR,
-		AND
-	};
+	enum ConditionType { EQUAL, NEQUAL, GREATER, GEQUAL, LESS, LEQUAL, OR, AND };
 
 	double A;
 	double B;
@@ -140,6 +130,8 @@ public:
 
 	double amplitude;
 	double offset;
+
+	enum FuncType { NONE, SIN, COS, TAN, ASIN, ACOS, ATAN };
 
 	TrigonometryNode();
 	void onExecute();

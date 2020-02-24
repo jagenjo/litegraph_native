@@ -82,7 +82,8 @@ void LiteGraph::LData::assign(mat4 v)
 
 void LiteGraph::LData::assign(const LEvent& v)
 {
-	setType(DataType::EVENT);
+	if (type != DataType::EVENT)
+		setType(DataType::EVENT);
 	LEvent* e = (LEvent*)custom_data;
 	*e = v;
 }
@@ -101,6 +102,22 @@ void LiteGraph::LData::assign(const char* str)
 		custom_data = (void*)text;
 	}
 	strcpy_s(text, l, str);
+}
+
+void LiteGraph::LData::assign(const std::string& str)
+{
+	int l = str.size();
+	if (type != DataType::STRING)
+		setType(DataType::STRING); //clears
+	char* text = NULL;
+	if (l != bytes)
+	{
+		clear();
+		text = new char[l];
+		bytes = l;
+		custom_data = (void*)text;
+	}
+	strcpy_s(text, l, str.c_str());
 }
 
 void LiteGraph::LData::assign(void* pointer, int size)
@@ -133,7 +150,7 @@ void LiteGraph::LData::assign(const std::vector<LData*>& v)
 	setType(DataType::ARRAY);
 	clear();
 	LData* d = new LData[v.size()];
-	for (int i = 0; i < v.size(); ++i)
+	for (unsigned int i = 0; i < v.size(); ++i)
 		d[i] = *v[i];
 	custom_data = (void*)d;
 }
@@ -142,9 +159,9 @@ std::vector<LiteGraph::LData*> LiteGraph::LData::getArray()
 {
 	LData* d = (LData*)custom_data;
 	std::vector<LData*> r;
-	int num = bytes / sizeof(LData*);
+	unsigned int num = bytes / sizeof(LData*);
 	r.resize(num);
-	for (int i = 0; i < num; ++i)
+	for (unsigned int i = 0; i < num; ++i)
 		r[i] = d + i;
 	return r;
 }
@@ -157,6 +174,29 @@ std::string LiteGraph::LData::getString()
 	result.resize(bytes);
 	strcpy_s(&result[0], bytes, (char*)custom_data );
 	return result;
+}
+
+LiteGraph::LEvent LiteGraph::LData::getEvent()
+{
+	LEvent e;
+	if (type == DataType::EVENT && bytes) //careful if not null terminates string
+		memcpy(&e, custom_data, sizeof(LEvent));
+	return e;
+}
+
+void* const LiteGraph::LData::getPointer()
+{
+	if (type != DataType::POINTER)
+		return NULL;
+	return pointer;
+}
+
+template<class T> T LiteGraph::LData::getObject()
+{
+	T obj;
+	if (type == DataType::OBJECT)
+		memcpy(&obj, custom_data, sizeof(T));
+	return T;
 }
 
 void LiteGraph::LData::operator = (const LData& v)
@@ -224,14 +264,14 @@ LiteGraph::LSlot* LiteGraph::LGraphNode::addOutput(const char* name, LiteGraph::
 
 LiteGraph::LSlot* LiteGraph::LGraphNode::getInputSlot(int i)
 {
-	if (i >= inputs.size())
+	if (i >= (int)inputs.size())
 		return NULL;
 	return inputs[i];
 }
 
 LiteGraph::LSlot* LiteGraph::LGraphNode::getOutputSlot(int i)
 {
-	if (i >= outputs.size())
+	if (i >= (int)outputs.size())
 		return NULL;
 	return outputs[i];
 }
@@ -319,7 +359,25 @@ LiteGraph::JSON LiteGraph::LGraphNode::getInputDataAsJSON(int index)
 	return NULL;
 }
 
-void LiteGraph::LGraphNode::setOutputDataAsBoolean(int index, bool v)
+/*
+template<typename T>
+void LiteGraph::LGraphNode::setOutputData(int index, const T& data)
+{
+	LSlot* slot = getOutputSlot(index);
+	if (!slot)
+		return;
+	LData* data = slot->data;
+	if (data == NULL || (slot->type != dataToType(T) && slot->type != DataType::ANY))
+	{
+		std::cout << "output data dont match: " << slot->type << " expected " << datatypes[ dataToType(T) ] << std::endl;
+		return;
+	}
+	data->assign(data);
+}
+*/
+
+
+void LiteGraph::LGraphNode::setOutputDataAsBoolean(int index, const bool& v)
 {
 	LSlot* slot = getOutputSlot(index);
 	if (!slot)
@@ -333,7 +391,35 @@ void LiteGraph::LGraphNode::setOutputDataAsBoolean(int index, bool v)
 	data->assign(v);
 }
 
-void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, double v)
+void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, const int& v)
+{
+	LSlot* slot = getOutputSlot(index);
+	if (!slot)
+		return;
+	LData* data = slot->data;
+	if (data == NULL || (slot->type != DataType::NUMBER && slot->type != DataType::ANY))
+	{
+		std::cout << "output data dont match: " << slot->type << " expected NUMBER " << std::endl;
+		return;
+	}
+	data->assign(v);
+}
+
+void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, const float& v)
+{
+	LSlot* slot = getOutputSlot(index);
+	if (!slot)
+		return;
+	LData* data = slot->data;
+	if (data == NULL || (slot->type != DataType::NUMBER && slot->type != DataType::ANY))
+	{
+		std::cout << "output data dont match: " << slot->type << " expected NUMBER " << std::endl;
+		return;
+	}
+	data->assign(v);
+}
+
+void LiteGraph::LGraphNode::setOutputDataAsNumber(int index, const double& v)
 {
 	LSlot* slot = getOutputSlot(index);
 	if (!slot)
@@ -376,7 +462,7 @@ void LiteGraph::LGraphNode::setOutputDataAsPointer(int index, void* v)
 	data->assign(v);
 }
 
-void LiteGraph::LGraphNode::setOutputDataAsEvent(int index, LEvent event)
+void LiteGraph::LGraphNode::setOutputDataAsEvent(int index, const LEvent& event)
 {
 	LSlot* slot = getOutputSlot(index);
 	if (!slot)
@@ -390,7 +476,7 @@ void LiteGraph::LGraphNode::setOutputDataAsEvent(int index, LEvent event)
 	data->assign(event);
 }
 
-void LiteGraph::LGraphNode::trigger(int index, LEvent event)
+void LiteGraph::LGraphNode::trigger(int index, const LEvent& event)
 {
 	LSlot* slot = getOutputSlot(index);
 	if (!slot)
@@ -403,7 +489,7 @@ void LiteGraph::LGraphNode::trigger(int index, LEvent event)
 	}
 	data->assign(event);
 
-	for (int i = 0; i < slot->links.size(); ++i)
+	for (unsigned int i = 0; i < slot->links.size(); ++i)
 	{
 		LLink* link = slot->links[i];
 		LGraphNode* target_node = graph->getNodeById(link->target_id);
@@ -429,9 +515,9 @@ void LiteGraph::LGraphNode::serialize() {}
 
 void LiteGraph::LGraphNode::removeSlots()
 {
-	for (int i = 0; i < inputs.size(); ++i)
+	for (unsigned int i = 0; i < inputs.size(); ++i)
 		delete inputs[i];
-	for (int i = 0; i < outputs.size(); ++i)
+	for (unsigned int i = 0; i < outputs.size(); ++i)
 		delete outputs[i];
 	inputs.clear();
 	outputs.clear();
@@ -477,9 +563,9 @@ void LiteGraph::LGraph::clear()
 	has_errors = false;
 
 	//free
-	for (int i = 0; i < nodes.size(); ++i)
+	for (unsigned int i = 0; i < nodes.size(); ++i)
 		delete nodes[i];
-	for (int i = 0; i < links.size(); ++i)
+	for (unsigned int i = 0; i < links.size(); ++i)
 		delete links[i];
 
 	//empty
@@ -495,7 +581,7 @@ void LiteGraph::LGraph::clear()
 
 void LiteGraph::LGraph::runStep(float dt)
 {
-	for (int i = 0; i < nodes_in_execution_order.size(); ++i)
+	for (unsigned int i = 0; i < nodes_in_execution_order.size(); ++i)
 	{
 		LGraphNode* node = nodes_in_execution_order[i];
 		node->onExecute();
@@ -708,7 +794,7 @@ bool LiteGraph::readJSONNumber(JSON obj, const char* name, float& dst)
 	if (!value_json)
 		return false;
 	if (cJSON_IsNumber(value_json))
-		dst = value_json->valueint;
+		dst = (float)value_json->valuedouble;
 	else
 		return false;
 	return true;
@@ -761,7 +847,7 @@ std::map<std::string, int> custom_data_types;
 std::string capitalize(std::string str)
 {
 	std::string result = str;
-	for (int i = 0; i < result.size(); ++i)
+	for (unsigned int i = 0; i < result.size(); ++i)
 		result[i] = toupper(result[i]);
 	return result;
 }

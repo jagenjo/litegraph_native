@@ -15,6 +15,8 @@ namespace LiteGraph {
 	struct mat3 { float m[9]; };
 	struct mat4 { float m[16]; };
 
+	class LData;
+	class LEvent;
 	class LSlot;
 	class LLink;
 	class LGraph;
@@ -39,13 +41,32 @@ namespace LiteGraph {
 		QUAT,
 		MAT3,
 		MAT4,
-		ARRAY, //array of LData
-		JSON_OBJECT,
-		OBJECT, //generic object that must be stored inside
-		POINTER,//pointer to something outside
-		EVENT,//event
+		ARRAY,		//array of LData, used to store an array of generic info
+		OBJECT,		//generic object that must be stored inside WARNING: CANNOT CONTAIN POINTERS or VIRTUAL METHODS
+		POINTER,	//pointer to something outside, it only stores the address
+		EVENT,		//LEvent
+		JSON_OBJECT,//TODO
 		ANY
 	};
+
+	static std::string datatypes[] = { "NONE", "CUSTOM", "ENUM", "STRING", "BOOL", "VEC2", "VEC3", "VEC4", "QUAT", "MAT3", "MAT4", "ARRAY", "OBJECT", "POINTER", "EVENT", "JSON_OBJECT", "ANY" };
+	
+	static DataType dataToType(const bool& v) { return DataType::BOOL; }
+	static DataType dataToType(const float& v) { return DataType::NUMBER; }
+	static DataType dataToType(const double& v) { return DataType::NUMBER; }
+	static DataType dataToType(const int& v) { return DataType::NUMBER; }
+	static DataType dataToType(const long& v) { return DataType::NUMBER; }
+	static DataType dataToType(const vec2& v) { return DataType::VEC2; }
+	static DataType dataToType(const vec3& v) { return DataType::VEC3; }
+	static DataType dataToType(const vec4& v) { return DataType::VEC4; }
+	static DataType dataToType(const mat3& v) { return DataType::MAT3; }
+	static DataType dataToType(const mat4& v) { return DataType::MAT4; }
+	static DataType dataToType(const LEvent& v) { return DataType::EVENT; }
+	static DataType dataToType(const char* v) { return DataType::STRING; }
+	static DataType dataToType(const std::string&) { return DataType::STRING; }
+	static DataType dataToType(const std::vector<LData*>& v) { return DataType::ARRAY; }
+	template<class T> static DataType dataToType(const T& v) { return DataType::OBJECT; }
+	template<class T> static DataType dataToType(const T* v) { return DataType::POINTER; }
 
 	#define LEVENT_SIZE 255
 
@@ -71,7 +92,7 @@ namespace LiteGraph {
 	public:
 		DataType type;
 
-		//generic types (this ones cannot have pointers inside)
+		//generic types (this ones cannot have pointers inside and must be lightweight)
 		union {
 			bool boolean;
 			uint8_t enumeration;
@@ -80,7 +101,7 @@ namespace LiteGraph {
 			vec3 vector3;
 			vec4 vector4;
 			quat quaternion;
-			void* pointer;
+			void* pointer; //to store generic stuff
 		};
 
 		//used to store large objects or objects with variable size
@@ -92,7 +113,9 @@ namespace LiteGraph {
 		void clear();
 		void setType(DataType type);
 
+		void assign(int v) { setType(DataType::NUMBER); number = v; }
 		void assign(float v) { setType(DataType::NUMBER); number = v; }
+		void assign(double v) { setType(DataType::NUMBER); number = v; }
 		void assign(vec2 v) { setType(DataType::VEC2); vector2 = v; }
 		void assign(vec3 v) { setType(DataType::VEC3); vector3 = v; }
 		void assign(vec4 v) { setType(DataType::VEC4); vector4 = v; }
@@ -103,6 +126,7 @@ namespace LiteGraph {
 		void assign(mat4 v);
 		void assign(const LEvent& v);
 		void assign(const char* str);
+		void assign(const std::string& str);
 		void assign(void* pointer, int size);
 		void assign(const std::vector<LData*>& v);
 		template<class T> void assignObject(const T& obj);
@@ -110,8 +134,14 @@ namespace LiteGraph {
 		LEvent getEvent();
 		std::string getString();
 		std::vector<LData*> getArray();
+		void* const getPointer(); //for safe accessing the data
+		template<class T> T getObject(); //I think this will crash...
 
 		void operator = (const LData& v);
+		void operator = (const bool& v) { assign(v); }
+		void operator = (const float& v) { assign(v); }
+		void operator = (const std::string & v) { assign(v); }
+		void operator = (const LEvent& v) { assign(v); }
 	};
 
 	class LLink {
@@ -127,14 +157,14 @@ namespace LiteGraph {
 
 	class LSlot {
 	public:
+		std::string name;	//slot name can beused by some nodes during execution to define data to send (specially in variable slots nodes)
+		DataType type;		//expected data type for this slot, could be DataType::ANY if several are supported
+		int custom_type;	//used by some nodes to precompute comparisons based on slot name (to optimize execution)
+		LData* data;		//pointer to the slot data
+		LGraphNode* node;	//parent node
 
-		std::string name;
-		DataType type;
-		LData* data; //pointer to the slot data
-		LGraphNode* node; //parent node
-
-		LLink* link; //for input slots
-		std::vector<LLink*> links; //for output slots
+		LLink* link;		//for input slots (one single connection allowed)
+		std::vector<LLink*> links; //for output slots (multiple connections allowed)
 
 		LSlot(LGraphNode* node, const char* name, DataType type)
 		{
@@ -143,6 +173,7 @@ namespace LiteGraph {
 			data = NULL;
 			link = NULL;
 			this->node = node;
+			custom_type = -1;
 		}
 
 		bool isConnected() { return link != NULL || links.size(); }
@@ -190,14 +221,30 @@ namespace LiteGraph {
 		std::string getInputDataAsString(int slot);
 		JSON getInputDataAsJSON(int slot);
 
-		void setOutputDataAsBoolean(int slot, bool v);
-		void setOutputDataAsNumber(int slot, double v);
+		//allows to send data directly without specifying the type manually
+		template<typename T> void setOutputData(int index, const T& v) {
+			LSlot* slot = getOutputSlot(index);
+			if (!slot)
+				return;
+			LData* data = slot->data;
+			if (data == NULL || (slot->type != dataToType(v) && slot->type != DataType::ANY))
+			{
+				std::cout << "output data dont match: " << slot->type << " expected " << datatypes[dataToType(v)] << std::endl;
+				return;
+			}
+			data->assign(v);
+		}
+
+		void setOutputDataAsBoolean(int slot, const bool& v);
+		void setOutputDataAsNumber(int slot, const int& v);
+		void setOutputDataAsNumber(int slot, const float& v);
+		void setOutputDataAsNumber(int slot, const double& v);
 		void setOutputDataAsString(int slot, const char* v);
 		void setOutputDataAsPointer(int slot, void* v);
-		void setOutputDataAsEvent(int slot, LEvent event);
+		void setOutputDataAsEvent(int slot, const LEvent& event);
 
-		void trigger(int slot, LEvent event);
-		virtual void onAction(int slot, LEvent& event) {};
+		void trigger(int slot, const LEvent& event);
+		virtual void onAction(int slot, const LEvent& event) {};
 
 		virtual const char* getType() { return ""; }
 		virtual LGraphNode* clone() { return new LGraphNode();  }; //must use REGISTERNODE( type, classname )

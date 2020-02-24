@@ -1,6 +1,10 @@
 #include "base.h"
 #include <iostream>
 
+//used by nodes that support JSON objects
+#include "../libs/cJSON.h"
+
+
 using namespace LiteGraph;
 
 
@@ -24,7 +28,7 @@ ConstNumberNode::ConstNumberNode()
 
 void ConstNumberNode::onExecute()
 {
-	setOutputDataAsNumber(0, value);
+	setOutputData(0, value);
 }
 
 void ConstNumberNode::onConfigure(void* json)
@@ -47,7 +51,7 @@ ConstStringNode::ConstStringNode()
 
 void ConstStringNode::onExecute()
 {
-	setOutputDataAsString(0, value.c_str());
+	setOutputData(0, value);
 }
 
 void ConstStringNode::onConfigure(void* json)
@@ -106,10 +110,36 @@ ObjectPropertyNode::ObjectPropertyNode()
 void ObjectPropertyNode::onExecute()
 {
 	JSON input = getInputDataAsJSON(0);
-	if (input)
+	if (input == NULL)
+		return;
+	cJSON* input_json = (cJSON*)input;
+	if (input_json->type == cJSON_True)
 	{
+		setOutputData(0, true);
+	}
+	else if (input_json->type == cJSON_False)
+	{
+		setOutputData(0, false);
+	}
+	else if (input_json->type == cJSON_Number)
+	{
+		double num;
+		readJSONNumber(input, name.c_str(), num);
+		setOutputData(0, num);
+	}
+	else if (input_json->type == cJSON_String)
+	{
+		std::string _str;
 		readJSONString(input, name.c_str(), _str);
-		setOutputDataAsString(0, _str.c_str());
+		setOutputData(0, _str);
+	}
+	else if (input_json->type == cJSON_Array)
+	{
+		setOutputData(0, input_json);
+	}
+	else if (input_json->type == cJSON_Object)
+	{
+		setOutputData(0, input_json);
 	}
 }
 
@@ -137,9 +167,9 @@ GateNode::GateNode()
 void GateNode::onExecute()
 {
 	bool v = getInputDataAsBoolean(0);
-	float A = getInputDataAsNumber(1);
-	float B = getInputDataAsNumber(2);
-	setOutputDataAsNumber(0, v ? A : B );
+	double A = getInputDataAsNumber(1);
+	double B = getInputDataAsNumber(2);
+	setOutputData(0, v ? A : B );
 }
 
 GateNode* gate_node = new GateNode();
@@ -171,7 +201,7 @@ void ConsoleNode::onExecute()
 {
 }
 
-void ConsoleNode::onAction(int slot_index, LEvent& event)
+void ConsoleNode::onAction(int slot_index, const LEvent& event)
 {
 	LSlot* slot = inputs[slot_index];
 	if(slot)
@@ -192,8 +222,8 @@ TimeNode::TimeNode()
 
 void TimeNode::onExecute()
 {
-	setOutputDataAsNumber( 0, graph->time * 1000 );
-	setOutputDataAsNumber( 1, graph->time );
+	setOutputData( 0, graph->time * 1000 );
+	setOutputData( 1, graph->time );
 }
 
 TimeNode* time_node = new TimeNode();
@@ -228,8 +258,8 @@ void ConditionNode::onExecute()
 		case ConditionType::OR: C = A != 0 || B != 0; break;
 		default: break;
 	}
-	setOutputDataAsBoolean(0, C);
-	setOutputDataAsBoolean(1, !C);
+	setOutputData(0, C);
+	setOutputData(1, !C);
 }
 
 void ConditionNode::onConfigure(void* json)
@@ -258,6 +288,10 @@ void ConditionNode::onConfigure(void* json)
 			OP = ConditionType::OR;
 		else if (cond == "&&")
 			OP = ConditionType::AND;
+		else
+		{
+			std::cout << "ConditionType unknown: " << cond << std::endl;
+		}
 	}
 }
 
@@ -277,7 +311,7 @@ TrigonometryNode::TrigonometryNode()
 
 void TrigonometryNode::onExecute()
 {
-	float v = 0;
+	double v = 0;
 	if (isInputConnected(0))
 		v = getInputDataAsNumber(0);
 	for (int i = 0; i < outputs.size(); ++i)
@@ -285,18 +319,18 @@ void TrigonometryNode::onExecute()
 		LSlot* slot = outputs[i];
 		if (!slot->isConnected())
 			continue;
-		if (slot->name == "sin")
-			setOutputDataAsNumber(i, sin(v) * amplitude + offset);
-		else if (slot->name == "cos")
-			setOutputDataAsNumber(i, cos(v) * amplitude + offset);
-		else if (slot->name == "tan")
-			setOutputDataAsNumber(i, tan(v) * amplitude + offset);
-		else if (slot->name == "asin")
-			setOutputDataAsNumber(i, asin(v) * amplitude + offset);
-		else if (slot->name == "acos")
-			setOutputDataAsNumber(i, asin(v) * amplitude + offset);
-		else if (slot->name == "atan")
-			setOutputDataAsNumber(i, asin(v) * amplitude + offset);
+		double tv = 0;
+		switch (slot->custom_type)
+		{
+			case SIN: tv = sin(v); break;
+			case COS: tv = cos(v); break;
+			case TAN: tv = tan(v); break;
+			case ASIN: tv = asin(v); break;
+			case ACOS: tv = acos(v); break;
+			case ATAN: tv = atan(v); break;
+			default: std::cout << "unknown trigonometric function: " << slot->name << std::endl;
+		}
+		setOutputDataAsNumber(i, tv * amplitude + offset);
 	}
 }
 
@@ -307,6 +341,29 @@ void TrigonometryNode::onConfigure(void* json)
 		return;
 	readJSONNumber(properties, "amplitude", amplitude);
 	readJSONNumber(properties, "offset", offset);
+
+	//example of precomputing string comparison to speed up execution
+	for (unsigned int i = 0; i < outputs.size(); ++i)
+	{
+		LSlot* slot = outputs[i];
+		if (slot->name == "sin")
+			slot->custom_type = TrigonometryNode::SIN;
+		else if (slot->name == "cos")
+			slot->custom_type = TrigonometryNode::COS;
+		else if (slot->name == "tan")
+			slot->custom_type = TrigonometryNode::TAN;
+		else if (slot->name == "asin")
+			slot->custom_type = TrigonometryNode::ASIN;
+		else if (slot->name == "acos")
+			slot->custom_type = TrigonometryNode::ACOS;
+		else if (slot->name == "atan")
+			slot->custom_type = TrigonometryNode::ATAN;
+		else
+		{
+			std::cout << "unknown trigonometric function: " << slot->name << std::endl;
+			slot->custom_type = TrigonometryNode::SIN;
+		}
+	}
 }
 
 
