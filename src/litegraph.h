@@ -183,6 +183,8 @@ namespace LiteGraph {
 			custom_type = -1;
 		}
 
+		~LSlot();
+
 		bool isConnected() { return link != NULL || links.size(); }
 		LData* getOriginData();
 	};
@@ -208,7 +210,10 @@ namespace LiteGraph {
 		std::vector<LSlot*> inputs;
 		std::vector<LSlot*> outputs;
 
+		void* custom_data;
+
 		LGraphNode();
+		virtual ~LGraphNode();
 		virtual void onExecute() {};
 
 		LSlot* addInput(const char* name, DataType type);
@@ -220,7 +225,9 @@ namespace LiteGraph {
 		bool isInputConnected(int index);
 		bool isOutputConnected(int index);
 
-		//void connect(int output_slot, LGraphNode* target_node, int target_input_slot);
+		void connect(int output_slot, LGraphNode* target_node, int target_input_slot);
+		void disconnectInput(int input_slot);
+		void disconnectOutput(int output_slot);
 
 		LData* getInputData(int slot);
 		bool getInputDataAsBoolean(int slot);
@@ -284,7 +291,10 @@ namespace LiteGraph {
 
 		double time; //in seconds
 
+		void* custom_data;
+
 		LGraph();
+		virtual ~LGraph();
 		void clear();
 
 		void add(LGraphNode* node);
@@ -292,7 +302,7 @@ namespace LiteGraph {
 
 		void runStep(float dt = 0);
 
-		bool configure(std::string data);
+		bool configure( std::string data );
 
 		void sortByExecutionOrder();
 

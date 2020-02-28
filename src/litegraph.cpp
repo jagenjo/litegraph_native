@@ -221,7 +221,22 @@ void LiteGraph::LData::setObject(T obj)
 }
 */
 
+LiteGraph::LSlot::~LSlot()
+{
+	if (!node || !node->graph)
+		return;
 
+	if (link) //input
+	{
+		LGraphNode* origin_node = node->graph->getNodeById( link->origin_id );
+		LSlot* origin_slot = origin_node->outputs[link->origin_slot];
+		
+	}
+
+	for (int i = 0; i < links.size(); ++i) //output
+	{
+	}
+}
 
 LiteGraph::LData* LiteGraph::LSlot::getOriginData()
 {
@@ -242,6 +257,12 @@ LiteGraph::LGraphNode::LGraphNode()
 {
 	graph = NULL;
 	id = -1;
+	custom_data = NULL;
+}
+
+LiteGraph::LGraphNode::~LGraphNode()
+{
+	removeSlots();
 }
 
 LiteGraph::LSlot* LiteGraph::LGraphNode::addInput(const char* name, LiteGraph::DataType type)
@@ -536,6 +557,13 @@ LiteGraph::LGraph::LGraph()
 	last_node_id = 0;
 	last_link_id = 0;
 	has_errors = false;
+	custom_data = NULL;
+}
+
+LiteGraph::LGraph::~LGraph()
+{
+	for (int i = 0; i < nodes.size(); ++i)
+		delete nodes[i];
 }
 
 void LiteGraph::LGraph::add(LGraphNode* node)
@@ -604,7 +632,7 @@ void LiteGraph::LGraph::setOutput( std::string name, LiteGraph::LData* data )
 	outputs[name] = data;
 }
 
-bool LiteGraph::LGraph::configure(std::string data)
+bool LiteGraph::LGraph::configure( std::string data )
 {
 	cJSON *json = cJSON_Parse(data.c_str());
 	if (json == NULL)
@@ -640,7 +668,7 @@ bool LiteGraph::LGraph::configure(std::string data)
 			node = new LGraphNode(); //create some base node
 		node->id = id;
 
-		//configure slots
+		//configure slots as they are in the json
 		node->removeSlots();
 		cJSON* slot_json = NULL;
 		cJSON* inputs_json = cJSON_GetObjectItemCaseSensitive(node_json, "inputs");
