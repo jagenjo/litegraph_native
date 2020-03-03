@@ -316,7 +316,7 @@ LiteGraph::LData* LiteGraph::LGraphNode::getInputData(int index)
 {
 	LSlot* slot = getInputSlot(index);
 	if (!slot)
-		return false;
+		return NULL;
 	return slot->getOriginData();
 }
 
