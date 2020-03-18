@@ -290,7 +290,7 @@ void ConditionNode::onConfigure(void* json)
 			OP = ConditionType::AND;
 		else
 		{
-			std::cout << "ConditionType unknown: " << cond << std::endl;
+			std::cerr << "ConditionType unknown: " << cond << std::endl;
 		}
 	}
 }

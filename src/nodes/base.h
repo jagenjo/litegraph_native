@@ -105,8 +105,6 @@ public:
 	void onExecute();
 };
 
-// Math *********************
-
 class ConditionNode : public LGraphNode
 {
 public:

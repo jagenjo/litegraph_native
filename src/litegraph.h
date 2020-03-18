@@ -201,6 +201,7 @@ namespace LiteGraph {
 	class LGraphNode {
 	public:
 		int id;
+		int flags;
 
 		LGraph* graph;
 		int order;
@@ -222,6 +223,12 @@ namespace LiteGraph {
 
 		LSlot* getInputSlot(int i);
 		LSlot* getOutputSlot(int i);
+
+		int findInputSlotIndex(std::string& name);
+		int findOutputSlotIndex(std::string& name);
+
+		LGraphNode* getInputNode(int slot_index);
+		std::vector<LGraphNode*> getOutputNodes(int slot_index);
 
 		bool isInputConnected(int index);
 		bool isOutputConnected(int index);
@@ -303,7 +310,7 @@ namespace LiteGraph {
 
 		void runStep(float dt = 0);
 
-		bool configure( std::string data );
+		virtual bool configure( std::string data );
 
 		void sortByExecutionOrder();
 

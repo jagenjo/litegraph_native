@@ -257,6 +257,7 @@ LiteGraph::LGraphNode::LGraphNode()
 {
 	graph = NULL;
 	id = -1;
+	flags = 0;
 	custom_data = NULL;
 }
 
@@ -294,6 +295,51 @@ LiteGraph::LSlot* LiteGraph::LGraphNode::getOutputSlot(int i)
 	if (i >= (int)outputs.size())
 		return NULL;
 	return outputs[i];
+}
+
+int LiteGraph::LGraphNode::findInputSlotIndex(std::string& name)
+{
+	for (int i = 0; i < inputs.size(); ++i)
+	{
+		LSlot* slot = inputs[i];
+		if (slot->name == name)
+			return i;
+	}
+	return -1;
+}
+
+int LiteGraph::LGraphNode::findOutputSlotIndex(std::string& name)
+{
+	for (int i = 0; i < outputs.size(); ++i)
+	{
+		LSlot* slot = outputs[i];
+		if (slot->name == name)
+			return i;
+	}
+	return -1;
+}
+
+LiteGraph::LGraphNode* LiteGraph::LGraphNode::getInputNode(int slot_index)
+{
+	assert(graph && slot_index < inputs.size());
+	LSlot* slot = outputs[slot_index];
+	if (!slot->link)
+		return NULL;
+	return graph->getNodeById(slot->link->origin_id);
+}
+
+std::vector<LiteGraph::LGraphNode*> LiteGraph::LGraphNode::getOutputNodes(int slot_index)
+{
+	assert(graph && slot_index < outputs.size() );
+	std::vector<LiteGraph::LGraphNode*> result;
+	LSlot* slot = outputs[slot_index];
+	for (int j = 0; j < slot->links.size(); ++j)
+	{
+		LLink* link = &slot->link[j];
+		LGraphNode* target = graph->getNodeById(link->target_id);
+		result.push_back(target);
+	}
+	return result;
 }
 
 bool LiteGraph::LGraphNode::isInputConnected(int index)
