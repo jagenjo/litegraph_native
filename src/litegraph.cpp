@@ -229,8 +229,12 @@ LiteGraph::LSlot::~LSlot()
 	if (link) //input
 	{
 		LGraphNode* origin_node = node->graph->getNodeById( link->origin_id );
-		LSlot* origin_slot = origin_node->outputs[link->origin_slot];
-		
+		if (origin_node->outputs.size() > link->origin_slot)
+		{
+			LSlot* origin_slot = origin_node->outputs[link->origin_slot];
+			//remove link
+			//TODO
+		}
 	}
 
 	for (int i = 0; i < links.size(); ++i) //output
@@ -600,6 +604,7 @@ LiteGraph::LLink::LLink(int id, int origin_id, int origin_slot, int target_id, i
 
 LiteGraph::LGraph::LGraph()
 {
+	id = 0;
 	last_node_id = 0;
 	last_link_id = 0;
 	has_errors = false;
@@ -610,6 +615,7 @@ LiteGraph::LGraph::~LGraph()
 {
 	for (int i = 0; i < nodes.size(); ++i)
 		delete nodes[i];
+	nodes.clear();
 }
 
 void LiteGraph::LGraph::add(LGraphNode* node)
