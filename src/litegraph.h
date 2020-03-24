@@ -292,6 +292,7 @@ namespace LiteGraph {
 
 		std::map<std::string, LData*> outputs;
 
+		int id; //could be helpful, not used for anything
 		int last_node_id;
 		int last_link_id;
 
