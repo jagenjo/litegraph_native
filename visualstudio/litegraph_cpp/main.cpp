@@ -17,6 +17,8 @@ int main()
 
 	std::cout << "Loading graph..." << filename << std::endl;
 	std::string data = LiteGraph::getFileContent( filename.c_str() );
+	if (!data.size())
+		std::cout << "file not found or empty:" << filename << std::endl;
 
 	LiteGraph::LGraph mygraph;
 	if (!mygraph.configure(data))

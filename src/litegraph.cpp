@@ -339,7 +339,7 @@ std::vector<LiteGraph::LGraphNode*> LiteGraph::LGraphNode::getOutputNodes(int sl
 	LSlot* slot = outputs[slot_index];
 	for (int j = 0; j < slot->links.size(); ++j)
 	{
-		LLink* link = &slot->link[j];
+		LLink* link = slot->links[j];
 		LGraphNode* target = graph->getNodeById(link->target_id);
 		result.push_back(target);
 	}
