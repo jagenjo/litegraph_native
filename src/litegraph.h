@@ -122,19 +122,25 @@ namespace LiteGraph {
 		void assign(vec4 v) { setType(DataType::VEC4); vector4 = v; }
 		//void assign(quat v) { setType(DataType::QUAT); quaternion = v; } //same as vec4 so no need
 		void assign(void* pointer) { setType(DataType::POINTER); this->pointer = pointer; }
+		
+		void assign(std::vector<float>& v) { assign(&v[0], sizeof(float) * v.size()); }
 
 		void assign(mat3 v);
 		void assign(mat4 v);
 		void assign(const LEvent& v);
 		void assign(const char* str);
 		void assign(const std::string& str);
-		void assign(void* pointer, int size);
+
+		//WARNING: USE THIS METHODS ONLY FOR BASIC STRUCTS, NOT IF YOUR OBJECT CONTAIN POINTERS!!! (NO std::string,std::vector NOR ANY CLASS WITH POINTERS) as it does a memcopy
+		void assign(void* pointer, int size); 
+		template<class T> void assignObject(const T& obj); 
+
 		void assign(const std::vector<LData*>& v);
-		template<class T> void assignObject(const T& obj);
 
 		LEvent getEvent();
 		std::string getString();
-		std::vector<LData*> getArray();
+		std::vector<LData*> getArray(); //array of generic data
+		std::vector<float> getArrayOfFloat();
 		void* const getPointer(); //for safe accessing the data
 		void* getObject();
 		template<class T> T getObject(const T& v) //Used with custom types

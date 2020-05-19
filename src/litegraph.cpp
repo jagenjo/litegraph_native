@@ -106,18 +106,16 @@ void LiteGraph::LData::assign(const char* str)
 
 void LiteGraph::LData::assign(const std::string& str)
 {
-	int l = str.size();
+	int l = str.size() + 1; //plus one for the '\0' character
 	if (type != DataType::STRING)
 		setType(DataType::STRING); //clears
-	char* text = NULL;
 	if (l != bytes)
 	{
 		clear();
-		text = new char[l];
+		custom_data = new char[l];
 		bytes = l;
-		custom_data = (void*)text;
 	}
-	strcpy_s(text, l, str.c_str());
+	strcpy_s( (char*)custom_data, l, str.c_str());
 }
 
 void LiteGraph::LData::assign(void* pointer, int size)
@@ -153,6 +151,14 @@ void LiteGraph::LData::assign(const std::vector<LData*>& v)
 	for (unsigned int i = 0; i < v.size(); ++i)
 		d[i] = *v[i];
 	custom_data = (void*)d;
+}
+
+std::vector<float> LiteGraph::LData::getArrayOfFloat()
+{
+	std::vector<float> v;
+	v.resize(bytes / sizeof(float)); 
+	memcpy(&v[0], custom_data, bytes);
+	return v;
 }
 
 std::vector<LiteGraph::LData*> LiteGraph::LData::getArray()
