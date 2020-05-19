@@ -90,18 +90,16 @@ void LiteGraph::LData::assign(const LEvent& v)
 
 void LiteGraph::LData::assign(const char* str)
 {
-	int l = strlen(str);
+	int l = strlen(str) + 1; //plus one for the '\0' character
 	if (type != DataType::STRING)
 		setType(DataType::STRING); //clears
-	char* text = NULL;
 	if (l != bytes)
 	{
 		clear();
-		text = new char[l];
+		custom_data = new char[l];
 		bytes = l;
-		custom_data = (void*)text;
 	}
-	strcpy_s(text, l, str);
+	strcpy_s((char*)custom_data, l, str);
 }
 
 void LiteGraph::LData::assign(const std::string& str)
@@ -823,6 +821,7 @@ bool LiteGraph::LGraph::configure( std::string data )
 std::string LiteGraph::getFileContent(const std::string& path)
 {
 	std::ifstream file(path);
+	
 	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 	return content;
 }
