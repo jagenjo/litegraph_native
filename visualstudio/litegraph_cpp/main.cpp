@@ -15,6 +15,12 @@ int main()
 	std::string filename;
 	filename = "data/events2.JSON";
 
+	//this will register all the base nodes
+	LiteGraph::init();
+	
+	//register here your own nodes
+	//...
+
 	std::cout << "Loading graph..." << filename << std::endl;
 	std::string data = LiteGraph::getFileContent( filename.c_str() );
 	if (!data.size())

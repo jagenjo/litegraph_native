@@ -984,3 +984,8 @@ LiteGraph::DataType LiteGraph::stringToType(const char* str)
 	return DataType::CUSTOM;
 }
 
+void LiteGraph::init()
+{
+	//register base nodes in the system
+	initBaseNodes();
+}

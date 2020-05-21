@@ -335,4 +335,7 @@ namespace LiteGraph {
 	JSON getJSONObject(JSON obj, const char* name);
 	JSON parseJSON(const char* str);
 	void freeJSON(JSON obj);
+
+	void init();
+	void initBaseNodes();
 }

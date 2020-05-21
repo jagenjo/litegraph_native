@@ -15,7 +15,6 @@ OutputNode::OutputNode()
 	addInput("in", DataType::NUMBER);
 }
 
-OutputNode* output_node = new OutputNode();
 
 //*****************************
 
@@ -39,9 +38,6 @@ void ConstNumberNode::onConfigure(void* json)
 	readJSONNumber(properties, "value", value);
 }
 
-ConstNumberNode* const_node = new ConstNumberNode();
-
-
 ConstStringNode::ConstStringNode()
 {
 	CTOR_NODE();
@@ -62,7 +58,6 @@ void ConstStringNode::onConfigure(void* json)
 	readJSONString(properties, "value", value);
 }
 
-ConstStringNode* const_string_node = new ConstStringNode();
 
 
 ConstDataNode::ConstDataNode()
@@ -96,7 +91,6 @@ void ConstDataNode::onConfigure(void* json)
 	}
 }
 
-ConstDataNode* const_data_node = new ConstDataNode();
 
 
 ObjectPropertyNode::ObjectPropertyNode()
@@ -151,8 +145,6 @@ void ObjectPropertyNode::onConfigure(void* json)
 	//readJSONString(properties, "value", value);
 }
 
-ObjectPropertyNode* object_property_node = new ObjectPropertyNode();
-
 //*****************************
 
 GateNode::GateNode()
@@ -172,8 +164,6 @@ void GateNode::onExecute()
 	setOutputData(0, v ? A : B );
 }
 
-GateNode* gate_node = new GateNode();
-
 //*****************************
 WatchNode::WatchNode()
 {
@@ -186,8 +176,6 @@ void WatchNode::onExecute()
 {
 	std::cout << "Out: " << getInputDataAsString(0) << std::endl;
 }
-
-WatchNode* watch_node = new WatchNode();
 
 
 ConsoleNode::ConsoleNode()
@@ -208,8 +196,6 @@ void ConsoleNode::onAction(int slot_index, const LEvent& event)
 		std::cout << slot->name << ": " << event.type << std::endl;
 }
 
-ConsoleNode* console_node = new ConsoleNode();
-
 //*************************
 
 TimeNode::TimeNode()
@@ -225,8 +211,6 @@ void TimeNode::onExecute()
 	setOutputData( 0, graph->time * 1000 );
 	setOutputData( 1, graph->time );
 }
-
-TimeNode* time_node = new TimeNode();
 
 //*************************
 
@@ -294,10 +278,6 @@ void ConditionNode::onConfigure(void* json)
 		}
 	}
 }
-
-ConditionNode* condition_node = new ConditionNode();
-
-
 
 
 TrigonometryNode::TrigonometryNode()
@@ -367,10 +347,7 @@ void TrigonometryNode::onConfigure(void* json)
 }
 
 
-TrigonometryNode* trigonometry_node = new TrigonometryNode();
-
 //**************************************
-
 
 TimerNode::TimerNode()
 {
@@ -401,4 +378,18 @@ void TimerNode::onConfigure(void* json)
 }
 
 
-TimerNode* timer_node = new TimerNode();
+void LiteGraph::initBaseNodes()
+{
+	OutputNode* output_node = new OutputNode();
+	TrigonometryNode* trigonometry_node = new TrigonometryNode();
+	ConsoleNode* console_node = new ConsoleNode();
+	TimerNode* timer_node = new TimerNode();
+	TimeNode* time_node = new TimeNode();
+	ConstNumberNode* const_node = new ConstNumberNode();
+	ConditionNode* condition_node = new ConditionNode();
+	ObjectPropertyNode* object_property_node = new ObjectPropertyNode();
+	WatchNode* watch_node = new WatchNode();
+	ConstDataNode* const_data_node = new ConstDataNode();
+	ConstStringNode* const_string_node = new ConstStringNode();
+	GateNode* gate_node = new GateNode();
+}
