@@ -8,6 +8,7 @@
 #include "libs/cJSON.h"
 
 bool LiteGraph::verbose = false;
+std::map<std::string, LiteGraph::LGraphNode*> LiteGraph::node_types;
 
 
 LiteGraph::LData::LData()
