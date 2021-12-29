@@ -25,7 +25,7 @@ namespace LiteGraph {
 
 	typedef void* JSON;
 
-	static std::map<std::string, LGraphNode*> node_types;
+	extern std::map<std::string, LGraphNode*> node_types;
 	void registerNodeType(LGraphNode* node);
 	LGraphNode* createNode(const char* name);
 	
