@@ -21,6 +21,7 @@ int main()
 	//register here your own nodes
 	//...
 
+	std::cout << "Node types registered: " << LiteGraph::node_types.size() << std::endl;
 	std::cout << "Loading graph..." << filename << std::endl;
 	std::string data = LiteGraph::getFileContent( filename.c_str() );
 	if (!data.size())
