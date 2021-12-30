@@ -367,6 +367,61 @@ bool LiteGraph::LGraphNode::isOutputConnected(int index)
 	return slot->isConnected();
 }
 
+void LiteGraph::LGraphNode::connect(int output_slot, LiteGraph::LGraphNode* target_node, int target_input_slot) {
+	//Create the new link
+	assert(target_node != nullptr && "Target node is nullptr");
+
+	auto* source = outputs[output_slot];
+	auto* target = target_node->inputs[target_input_slot];
+
+	assert(source != nullptr && "Source slot index not found");
+	assert(target != nullptr && "Targfet slot index not found");
+
+	LLink* link = new LiteGraph::LLink(++graph->last_link_id, id, output_slot, target_node->id, target_input_slot);
+
+	//Persist changes
+	graph->links.push_back(link);
+	graph->links_by_id[id] = link;
+	source->links.push_back(link);
+	target->link = link;
+
+	//Log
+	if (LiteGraph::verbose) {
+		const char* link_type = LiteGraph::typeToString(target->type);
+		std::cout << id << " -> " << target_node->id << " [" << (link_type ? link_type : "*") << "]" << std::endl;
+	}
+
+}
+
+void LiteGraph::LGraphNode::disconnectInput(int input_slot) {
+	auto* slot = inputs[input_slot];
+	assert(slot != nullptr && "Slot index not found");
+
+	{//Remove from graph
+		graph->links_by_id.erase(slot->link->id);
+		auto it = std::find(graph->links.begin(), graph->links.end(), slot->link);
+		if (it != graph->links.end())
+			graph->links.erase(it);
+	}
+
+	{//Remove from source
+		auto* link_source_slot = graph->getNodeById(slot->link->origin_id)->getOutputSlot(slot->link->origin_slot);
+		auto it = std::find(link_source_slot->links.begin(), link_source_slot->links.end(), slot->link);
+		if (it != link_source_slot->links.end())
+			link_source_slot->links.erase(it);
+	}
+
+	{//Remove from target
+		auto* link_target_slot = graph->getNodeById(slot->link->target_id)->getInputSlot(slot->link->target_slot);
+		delete link_target_slot->link;
+		link_target_slot->link = nullptr;
+	}
+}
+
+void LiteGraph::LGraphNode::disconnectOutput(int output_slot) {
+	//TODO::do not use?
+}
+
 LiteGraph::LData* LiteGraph::LGraphNode::getInputData(int index)
 {
 	LSlot* slot = getInputSlot(index);
@@ -983,6 +1038,27 @@ LiteGraph::DataType LiteGraph::stringToType(const char* str)
 		return DataType::ANY;
 
 	return DataType::CUSTOM;
+}
+
+const char* LiteGraph::typeToString(LiteGraph::DataType type)
+{
+	switch (type)
+	{
+	case DataType::ENUM:		return "ENUM";
+	case DataType::NUMBER:		return "NUMBER";
+	case DataType::STRING:		return "STRING";
+	case DataType::BOOL:		return "BOOL";
+	case DataType::VEC2:		return "VEC2";
+	case DataType::VEC3:		return "VEC3";
+	case DataType::MAT4:		return "MAT4";
+	case DataType::OBJECT:		return "OBJECT";
+	case DataType::ARRAY:		return "ARRAY";
+	case DataType::JSON_OBJECT:	return "JSON_OBJECT";
+	case DataType::POINTER:		return "POINTER";
+	case DataType::EVENT:		return "EVENT";
+	case DataType::ANY:			return "*";
+	default: return "*";
+	}
 }
 
 void LiteGraph::init()

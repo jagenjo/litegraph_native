@@ -87,6 +87,7 @@ namespace LiteGraph {
 
 	void registerCustomDataType(const char* name, int id);
 	DataType stringToType(const char* str);
+	const char* typeToString(DataType type);
 
 	//total, 32 bytes per data (variable in case of dynamic content)
 	class LData {
