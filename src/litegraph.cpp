@@ -10,9 +10,32 @@
 bool LiteGraph::verbose = false;
 std::map<std::string, LiteGraph::LGraphNode*> LiteGraph::node_types;
 
-
-LiteGraph::LData::LData()
+LiteGraph::vec3 LiteGraph::hex2rgb(std::string hex)
 {
+    unsigned int r, g, b;
+    if (hex.length() == 4)//in case has the form #fff instead of #ffffff
+    {
+        char x, y, z;
+        char buffer[8];
+        sscanf_s(hex.c_str(), "#%c%c%c", &x, &y, &z);
+        snprintf(buffer, sizeof buffer, "#%c%c%c%c%c%c", x, x, y, y, z, z);
+        hex = buffer;
+    }
+    sscanf_s(hex.c_str(), "#%2x%2x%2x", &r, &g, &b);
+
+    vec3 color = { r,g,b };
+    return color;
+}
+
+std::string LiteGraph::rgb2hex(vec3 color)
+{
+    char hexcol[8];
+    snprintf(hexcol, sizeof hexcol, "#%02x%02x%02x", int(color.x), int(color.y), int(color.z) );
+    std::string result = hexcol;
+    return result;
+}
+
+LiteGraph::LData::LData() {
 	type = DataType::NONE;
 	bytes = 0;
 	custom_data = NULL;
@@ -779,6 +802,17 @@ bool LiteGraph::LGraph::configure( std::string data )
 		if (!node)
 			node = new LGraphNode(); //create some base node
 		node->id = id;
+    if (cJSON_HasObjectItem(node_json, "pos")) {
+        cJSON* pos_arr   = cJSON_GetObjectItem(node_json, "pos");
+        node->position.x = cJSON_GetArrayItem(pos_arr, 0)->valueint;
+        node->position.y = cJSON_GetArrayItem(pos_arr, 1)->valueint;
+    }
+
+    if (cJSON_HasObjectItem(node_json, "size")) {
+        cJSON* size_arr = cJSON_GetObjectItem(node_json, "size");
+        node->size.x    = cJSON_GetArrayItem(size_arr, 0)->valueint;
+        node->size.y    = cJSON_GetArrayItem(size_arr, 1)->valueint;
+    }
 
 		//configure slots as they are in the json
 		node->removeSlots();
@@ -815,8 +849,18 @@ bool LiteGraph::LGraph::configure( std::string data )
 			node->addOutput(slot_name, slot_type);
 		}
 
-		//configure internal node info
-		node->configure(node_json);
+    //hex2rgb
+    if (cJSON_HasObjectItem(node_json, "boxcolor")) {
+        char* hexcolor = cJSON_GetObjectItem(node_json, "boxcolor")->valuestring;
+        node->color = hex2rgb(hexcolor);
+    }
+    else{
+        vec3 defaultcolor = { 11,109,191 };
+        node->color = defaultcolor;
+    }
+
+    // configure internal node info
+    node->configure(node_json);
 
 		//add to graph
 		add(node);
@@ -873,9 +917,110 @@ bool LiteGraph::LGraph::configure( std::string data )
 	return true;
 }
 
-//utils
-std::string LiteGraph::getFileContent(const std::string& path)
-{
+std::string LiteGraph::LGraph::serialize() {
+  cJSON* json = cJSON_CreateObject();
+  cJSON_AddNumberToObject(json, "last_node_id", last_node_id);
+  cJSON_AddNumberToObject(json, "last_link_id", last_link_id);
+
+  auto* nodes_arr = cJSON_AddArrayToObject(json, "nodes");
+  for (auto* node : nodes) {
+    // nodes; {id, type, pos, size, flags{}, order, mode, inputs[{name, type,
+    // link}], outputs[{name, type, links}], properties:{}, boxcolor:hex }
+    cJSON* node_json = cJSON_CreateObject();
+    cJSON_AddNumberToObject(node_json, "id", node->id);
+    cJSON_AddStringToObject(node_json, "type", node->getType());
+
+    auto* pos_arr = cJSON_AddArrayToObject(node_json, "pos");
+    cJSON_AddItemToArray(pos_arr, cJSON_CreateNumber(node->position.x));
+    cJSON_AddItemToArray(pos_arr, cJSON_CreateNumber(node->position.y));
+
+    auto* size_arr = cJSON_AddArrayToObject(node_json, "size");
+    cJSON_AddItemToArray(size_arr, cJSON_CreateNumber(node->size.x));
+    cJSON_AddItemToArray(size_arr, cJSON_CreateNumber(node->size.y));
+
+    auto* flags_obj = cJSON_AddObjectToObject(node_json, "flags");
+    /*for (auto flag : node->flags)
+    {}*/
+
+    cJSON_AddNumberToObject(node_json, "order", node->order);
+    cJSON_AddNumberToObject(node_json, "mode", 0);//?
+
+    if (node->inputs.size()) 
+    {
+        auto* inputs_arr = cJSON_AddArrayToObject(node_json, "inputs");
+        for (auto* input : node->inputs) {
+          cJSON* input_json = cJSON_CreateObject();
+
+          cJSON_AddStringToObject(input_json, "name", input->name.c_str());
+          cJSON_AddStringToObject(input_json, "type",
+                                  LiteGraph::typeToString(input->type));
+          if (input->link)
+            cJSON_AddNumberToObject(input_json, "link", input->link->id);
+          else
+            cJSON_AddNullToObject(input_json, "link");
+
+          cJSON_AddItemToArray(inputs_arr, input_json);
+        }
+    }
+
+    if (node->outputs.size())
+    {
+        auto* outputs_arr = cJSON_AddArrayToObject(node_json, "outputs");
+        for (auto* output : node->outputs) {
+          cJSON* output_json = cJSON_CreateObject();
+
+          cJSON_AddStringToObject(output_json, "name", output->name.c_str());
+          cJSON_AddStringToObject(output_json, "type",
+                                  LiteGraph::typeToString(output->type));
+          auto* links_arr = cJSON_AddArrayToObject(output_json, "links");
+          for (auto* link : output->links)
+            cJSON_AddItemToArray(links_arr, cJSON_CreateNumber(link->id));
+
+          cJSON_AddItemToArray(outputs_arr, output_json);
+        }
+    }
+
+    auto* properties_obj = cJSON_AddObjectToObject(node_json, "properties");
+    // node properties missing?
+
+    std::string hexcolor = rgb2hex(node->color);
+    cJSON_AddStringToObject(node_json, "boxcolor", hexcolor.c_str());
+
+    // serialize internal node info
+    // node->serialize(node_json);
+
+    cJSON_AddItemToArray(nodes_arr, node_json);
+  }
+
+  cJSON* links_arr = cJSON_AddArrayToObject(json, "links");
+  for (auto* link : links) {
+    // links; array of [id, origin_node, origin_slot, target_node, target_slot,
+    // type]
+    cJSON* link_arr = cJSON_CreateArray();
+
+    auto* node = nodes_by_id[link->target_id];
+    auto* slot = node->inputs[link->target_slot];
+    cJSON_AddItemToArray(link_arr, cJSON_CreateNumber(link->id));
+    cJSON_AddItemToArray(link_arr, cJSON_CreateNumber(link->origin_id));
+    cJSON_AddItemToArray(link_arr, cJSON_CreateNumber(link->origin_slot));
+    cJSON_AddItemToArray(link_arr, cJSON_CreateNumber(link->target_id));
+    cJSON_AddItemToArray(link_arr, cJSON_CreateNumber(link->target_slot));
+    cJSON_AddItemToArray(
+        link_arr, cJSON_CreateString(LiteGraph::typeToString(slot->type)));
+
+    cJSON_AddItemToArray(links_arr, link_arr);
+  }
+
+  // groups[]
+  // config{}
+  // version: number
+
+  std::string string = cJSON_Print(json);
+  return string;
+}
+
+// utils
+std::string LiteGraph::getFileContent(const std::string& path) {
 	std::ifstream file(path);
 	
 	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());

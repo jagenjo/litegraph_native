@@ -50,6 +50,9 @@ namespace LiteGraph {
 		ANY
 	};
 
+	vec3 hex2rgb(std::string hex);
+	std::string rgb2hex(vec3 color);
+
 	static std::string datatypes[] = { "NONE", "CUSTOM", "ENUM", "STRING", "BOOL", "VEC2", "VEC3", "VEC4", "QUAT", "MAT3", "MAT4", "ARRAY", "OBJECT", "POINTER", "EVENT", "JSON_OBJECT", "ANY" };
 	
 	static DataType dataToType(const bool& v) { return DataType::BOOL; }
@@ -215,6 +218,7 @@ namespace LiteGraph {
 
 		vec2 position;
 		vec2 size;
+		vec3 color;
 
 		std::vector<LSlot*> inputs;
 		std::vector<LSlot*> outputs;
@@ -319,6 +323,7 @@ namespace LiteGraph {
 		void runStep(float dt = 0);
 
 		virtual bool configure( std::string data );
+		virtual std::string serialize(); //not very necessary right now
 
 		void sortByExecutionOrder();
 
